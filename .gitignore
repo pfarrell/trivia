@@ -1,2 +1,4 @@
 .venv
 game_data
+__pycache__
+.idea
