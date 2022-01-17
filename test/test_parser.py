@@ -70,7 +70,7 @@ def validate_brad(contestant: Contestant):
     assert contestant.winnings == "1,999"
 
 
-def test_extrac     t_jeopardy_round(game_2318):
+def test_extract_jeopardy_round(game_2318):
     rnd = extract_round(game_2318, "jeopardy_round", Jeopardy(), {})
 
 
