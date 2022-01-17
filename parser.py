@@ -1,43 +1,44 @@
 import sys
 import getopt
-import requests
 import re
+from typing import List, Dict, Any, Optional
+
 from bs4 import BeautifulSoup
 import pdb
 
 
-class Show(object):
-    def __init__(self, show_number, show_date, id, previous_id, next_id):
-        self.number = show_number
-        self.air_date = show_date
-        self.id = id
-        self.previous_id = previous_id
-        self.next_id = next_id
-        self.comments = None
-        self.season = None
-        self.contestants = []
-        self.jeopardy = None
-        self.double_jeopardy = None
-        self.final_jeopardy = None
-        self.results = None
-        self.contestant_lookup = {}
-
-    def add_contestant(self, contestant):
-        self.contestants.append(contestant)
-        self.contestant_lookup[contestant.id] = contestant
-        self.contestant_lookup[contestant.nickname] = contestant
-        self.contestant_lookup[contestant.name] = contestant
-
-
 class Contestant(object):
-    def __init__(self, id, name, profession, origin):
-        self.id = id 
+    def __init__(self, contestant_id, name, profession, origin):
+        self.id = contestant_id
         self.name = name
         self.profession = profession
         self.origin = origin
         self.streak = 0
-        self.winnings = 0
+        self.winnings = None
         self.nickname = None
+
+
+class Show(object):
+    def __init__(self, season, show_number, show_date, show_id, previous_id, next_id):
+        self.number = show_number
+        self.air_date = show_date
+        self.id = show_id
+        self.previous_id = previous_id
+        self.next_id = next_id
+        self.season = season
+        self.comments = None
+        self.contestants: List[Contestant] = []
+        self.jeopardy: Optional[Jeopardy] = None
+        self.double_jeopardy: Optional[DoubleJeopardy] = None
+        self.final_jeopardy: Optional[FinalJeopardy] = None
+        self.results = None
+        self.contestant_lookup: Dict[Any: Contestant] = {}
+
+    def add_contestant(self, contestant: Contestant):
+        self.contestants.append(contestant)
+        self.contestant_lookup[contestant.id] = contestant
+        self.contestant_lookup[contestant.nickname] = contestant
+        self.contestant_lookup[contestant.name] = contestant
 
 
 class Category(object):
@@ -46,24 +47,39 @@ class Category(object):
         self.comment = comment
 
 
+class Clue(object):
+    def __init__(self, value, category, location, text, correct_response):
+        self.text = text
+        self.value = value
+        self.correct_response = correct_response
+        self.category = category
+        self.location = location
+        self.id = None
+        self.order = None
+        self.daily_double = None
+        self.responder = None
+
+
 class Jeopardy(object):
     def __init(self):
-        self.categories=[]
-        self.clues=[]
-    
-    def add_clue(clue):
+        self.categories: List[Category] = []
+        self.clues: List[Clue] = []
+
+    def add_clue(self, clue: Clue):
         self.clues.append(clue)
 
-    def add_category(category):
+    def add_category(self, category: Category):
         self.categories.append(category)
 
 
 class DoubleJeopardy(Jeopardy):
-    pass
+    def __init(self):
+        Jeopardy.__init__(self)
 
 
 class FinalJeopardy(Jeopardy):
-    pass
+    def __init(self):
+        Jeopardy.__init__(self)
 
 
 def extract_show_info(soup):
@@ -88,22 +104,27 @@ def extract_season(soup):
 
 def extract_contestants_section(soup):
     table = soup.find_all("table", id="contestants_table")[0]
-    for idx, child in enumerate(table.contents[0].children):
-        if child == '\n':
-            continue
-        if idx == 1:
-            prev_game = extract_url_id(child.contents[1].attrs['href'])
-        elif idx == 3:
-            contestants = extract_contestants(child)
-        elif idx == 5:
-            next_game = extract_url_id(child.contents[1].attrs['href'])
-
+    contestants, prev_game, next_game = (None, None, None)
+    contestants = extract_contestants(table.find_all("p", class_="contestants"))
+    prev_id, next_id = extract_game_links(table)
     return contestants, prev_game, next_game
 
 
-def extract_contestants(soup):
+def extract_game_link(soup):
+    pass
+
+def extract_game_links(soup):
+    prev_id, next_id = None, None
+    links = soup.find_all("td")
+    if len(links) == 3:
+        prev_id = extract_game_link(links[0])
+        next_id = extract_game_link(links[2])
+    return prev_id, next_id
+
+
+def extract_contestants(contestants_list):
     contestants = []
-    for child in soup.children:
+    for child in contestants_list:
         if child == '\n':
             continue
         else:
@@ -113,11 +134,16 @@ def extract_contestants(soup):
 
 def extract_contestant(soup):
     player_id = extract_url_id(soup.contents[0].attrs['href'])
+    assert player_id
     name = soup.contents[0].text
+    assert name
     profession, origin = soup.text.replace(f"{name}, ", "").split(" from ")
+    assert origin
     contestant = Contestant(player_id, name, profession, origin)
+    # TODO this does not work (on game 52, where Christina is nicknamed "Chris").  Need to check final results by order
+    # to extract nicknames
     contestant.nickname = name.split(" ")[0]
-    if re.search("\(whose", origin):
+    if re.search(r"\(whose", origin):
         origin, streak, winnings = extract_winnings(origin)
         contestant.origin = origin
         contestant.streak = streak
@@ -125,27 +151,170 @@ def extract_contestant(soup):
     return contestant
 
 
-def extract_winnings(str):
-    origin, commentary = str.split(' (whose ')
-    streak =  re.sub("-day.*", "", commentary)
-    winnings = re.search("[\d,]*\)$", commentary).group().replace(")", "")
+def extract_winnings(str_val):
+    origin, commentary = str_val.split(' (whose ')
+    assert origin
+    assert commentary
+    streak = re.sub("-day.*", "", commentary)
+    winnings = re.search(r"[\d,]*\)$", commentary).group().replace(")", "")
     return origin, streak, winnings
 
 
 def extract_url_id(url):
-    id = re.search(r"[\d]*$", url, flags=0)
-    return id.group()
+    url_id = re.search(r"[\d]*$", url, flags=0)
+    return url_id.group()
+
+
+def extract_round(soup, identifier, rnd, contestant_lookup):
+    data = soup.find("div", id=identifier)
+    # extract categories
+    rnd.categories = extract_round_categories(data.find_all("td", class_="category"))
+    # extract clues
+    if type(rnd) is not FinalJeopardy:
+        rnd.clues = extract_clues(data, rnd.categories, contestant_lookup)
+    else:
+        rnd.clues = extract_final_clue(data, rnd.categories, contestant_lookup)
+    return rnd
+
+
+def extract_round_categories(cats):
+    categories = []
+    for idx, cat in enumerate(cats):
+        category = extract_category(cat)
+        comment = extract_comment(cat)
+        categories.append(Category(category, comment))
+    return categories
+
+
+def extract_category(cat):
+    return cat.find_all("td", class_="category_name")[0].text
+
+
+def extract_comment(cat):
+    comment = cat.find_all("td", class_="category_comments")
+    if len(comment) > 0:
+        return comment[0].text
+    return None
+
+
+def extract_clues(rnd, categories, contestant_lookup):
+    clues = []
+    clues_data = rnd.find_all("td", class_="clue")
+    for clue_data in clues_data:
+        if clue_data.text != '\n':
+            clues.append(extract_clue(clue_data, categories, contestant_lookup))
+    return clues
+
+
+def extract_final_clue(rnd, categories, contestant_lookup):
+    clues = []
+    clue = extract_clue(rnd, categories, contestant_lookup)
+    clues.append(clue)
+    return clues
+
+
+def extract_clue_value(clue_data):
+    normal_clue = clue_data.find_all("td", class_="clue_value")
+    if normal_clue:
+        return normal_clue[0].text, False, False
+    else:
+        daily_double = clue_data.find_all("td", class_="clue_value_daily_double")
+        if daily_double:
+            return daily_double[0].text, True, False
+        else:
+            return None, False, True
+
+
+def extract_clue_order(clue_data):
+    order = clue_data.find_all("td", class_="clue_order_number")
+    if order:
+        return order[0].text
+    else:
+        return None
+
+
+def extract_clue_id(clue_data):
+    order = clue_data.find_all("td", class_="clue_order_number")
+    if not order:
+        return
+    return order[0].contents[0].attrs['href']
+
+
+def extract_correct_response(clue_data):
+    response = None
+    mo = clue_data.find_all("div")[0].attrs["onmouseover"]
+    split_attempt = mo.split('<em class="correct_response">')
+    if len(split_attempt) == 2:
+        response = split_attempt[1]
+        response = re.sub(r"<em>.*", "", response)
+    else:
+        split_attempt = mo.split('<em class=\\"correct_response\\">')
+        if len(split_attempt) == 2:
+            response = split_attempt[1]
+            response = re.sub(r"</em>.*", "", response)
+    return response
+
+
+def calculate_category(clue_data, categories):
+    # final jeopardy
+    if len(categories) == 1:
+        return categories[0]
+    else:
+        cat_num = extract_location(clue_data).split("_")[2]
+        return categories[int(cat_num) - 1]
+
+
+def extract_clue_text(clue_data):
+    return clue_data.find_all("td", class_="clue_text")[0].text
+
+
+def extract_location(clue_data):
+    id = clue_data.find_all("td", class_="clue_text")[0].attrs['id']
+    return id
+
+
+def extract_responder(clue_data, contestant_lookup):
+    responder = None
+    mo = clue_data.find_all("div")[0].attrs["onmouseover"]
+    split_attempt = mo.split('<td class="right">')
+    if len(split_attempt) == 2:
+        response = split_attempt[1]
+        response = re.sub(r"</td>.*", "", response)
+        responder = contestant_lookup[response]
+    else:
+        split_attempt = mo.split('<em class=\\"correct_response\\">')
+        if len(split_attempt) == 2:
+            response = split_attempt[1]
+            response = re.sub(r"</em>.*", "", response)
+    return responder
+
+
+def extract_clue(clue_data, categories, contestant_lookup):
+    value, daily_double, final_jeopardy = extract_clue_value(clue_data)
+    text = extract_clue_text(clue_data)
+    location = extract_location(clue_data)
+    correct_response = extract_correct_response(clue_data)
+    category = calculate_category(clue_data, categories)
+    clue = Clue(value, category, location, text, correct_response)
+    clue.daily_double = daily_double
+    if not final_jeopardy:
+        clue.id = extract_clue_id(clue_data)
+        clue.order = extract_clue_order(clue_data)
+        clue.responder = extract_responder(clue_data, contestant_lookup)
+    return clue
 
 
 def extract_show(soup):
-    pdb.set_trace()
     show_number, date = extract_show_info(soup)
     show_id = extract_show_id(soup)
-    season= extract_season(soup)
-    contestants, prev, next = extract_contestants_section(soup)
-    show = Show(show_number, date, show_id, prev, next)
+    season = extract_season(soup)
+    contestants, prev_id, next_id = extract_contestants_section(soup)
+    show = Show(season, show_number, date, show_id, prev_id, next_id)
     for contestant in contestants:
         show.add_contestant(contestant)
+    show.jeopardy = extract_round(soup, 'jeopardy_round', Jeopardy(), show.contestant_lookup)
+    show.double_jeopardy = extract_round(soup, 'double_jeopardy_round', DoubleJeopardy(), show.contestant_lookup)
+    show.final_jeopardy = extract_round(soup, 'final_jeopardy_round', FinalJeopardy(), show.contestant_lookup)
     return show
  
 
@@ -161,7 +330,7 @@ def main(argv):
         if opt=='-i':
             file_in = arg
 
-    parse(file_in)
+    return parse(file_in)
 
 
 def parse(file):
@@ -169,6 +338,7 @@ def parse(file):
         data=f.read()
     soup = BeautifulSoup(data, 'html.parser')
     show = extract_show(soup)
+    return show
 
 #  game_comments
 #  jeopardy
@@ -198,4 +368,5 @@ def parse(file):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    show = main(sys.argv[1:])
+    print(show.air_date)
