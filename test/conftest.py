@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 
 
 def get_game_data(game_id):
-    file = f"../test/fixtures/game_{game_id}"
+    file = f"../test/fixtures/game_{game_id}.html"
     with open(file, "r") as f:
         return f.read()
 
