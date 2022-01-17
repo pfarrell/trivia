@@ -102,12 +102,20 @@ def extract_season(soup):
     return season.group()
 
 
+def extract_nicknames(soup):
+    nicknames = []
+    name_list = soup.find_all("div", id="double_jeopardy_round")[0].find_all("td", class_="score_player_nickname")
+    for name in name_list:
+        nicknames.append(name.text)
+    return nicknames
+
 def extract_contestants_section(soup):
     table = soup.find_all("table", id="contestants_table")[0]
     contestants, prev_game, next_game = (None, None, None)
-    contestants = extract_contestants(table.find_all("p", class_="contestants"))
+    nicknames = extract_nicknames(soup)
+    contestants = extract_contestants(table.find_all("p", class_="contestants"), nicknames)
     prev_id, next_id = extract_game_links(table)
-    return contestants, prev_game, next_game
+    return contestants, prev_id, next_id
 
 
 def extract_game_link(soup):
@@ -122,17 +130,17 @@ def extract_game_links(soup):
     return prev_id, next_id
 
 
-def extract_contestants(contestants_list):
+def extract_contestants(contestants_list, nicknames):
     contestants = []
     for child in contestants_list:
         if child == '\n':
             continue
         else:
-            contestants.append(extract_contestant(child))
+            contestants.append(extract_contestant(child, nicknames[len(contestants)]))
     return contestants
 
 
-def extract_contestant(soup):
+def extract_contestant(soup, nickname):
     player_id = extract_url_id(soup.contents[0].attrs['href'])
     assert player_id
     name = soup.contents[0].text
@@ -142,7 +150,7 @@ def extract_contestant(soup):
     contestant = Contestant(player_id, name, profession, origin)
     # TODO this does not work (on game 52, where Christina is nicknamed "Chris").  Need to check final results by order
     # to extract nicknames
-    contestant.nickname = name.split(" ")[0]
+    contestant.nickname = nickname
     if re.search(r"\(whose", origin):
         origin, streak, winnings = extract_winnings(origin)
         contestant.origin = origin
