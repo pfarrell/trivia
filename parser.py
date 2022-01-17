@@ -150,7 +150,6 @@ def extract_contestant(soup, nickname):
         profession, origin = split
     else:
         profession, origin = soup.text.replace(f"{name}, ", "").rsplit(" from ", 1)
-    print(f"{name} ; {origin} ; {profession}")
     assert origin
     contestant = Contestant(player_id, name, profession, origin)
     # TODO this does not work (on game 52, where Christina is nicknamed "Chris").  Need to check final results by order
