@@ -90,8 +90,10 @@ def extract_show_info(soup):
 
 
 def extract_show_id(soup):
-    img = soup.find_all("img", class_="game_dynamics")[0]
-    show_id = extract_url_id(img.attrs['src'])
+    img = soup.find_all("img", class_="game_dynamics")
+    if not img:
+        return
+    show_id = extract_url_id(img[0].attrs['src'])
     return show_id
 
 
@@ -104,14 +106,17 @@ def extract_season(soup):
 
 def extract_nicknames(soup):
     nicknames = []
-    name_list = soup.find_all("div", id="double_jeopardy_round")[0].find_all("td", class_="score_player_nickname")
+    name_list = soup.find_all("div", id="double_jeopardy_round")
+    if not name_list:
+        return
+    name_list = name_list[0].find_all("td", class_="score_player_nickname")
     for name in name_list:
         nicknames.append(name.text)
     return nicknames
 
+
 def extract_contestants_section(soup):
     table = soup.find_all("table", id="contestants_table")[0]
-    contestants, prev_game, next_game = (None, None, None)
     nicknames = extract_nicknames(soup)
     contestants = extract_contestants(table.find_all("p", class_="contestants"), nicknames)
     prev_id, next_id = extract_game_links(table)
@@ -249,7 +254,10 @@ def extract_clue_id(clue_data):
     order = clue_data.find_all("td", class_="clue_order_number")
     if not order:
         return
-    return order[0].contents[0].attrs['href']
+    try:
+        return order[0].contents[0].attrs['href']
+    except:
+        return
 
 
 def extract_correct_response(clue_data):
@@ -316,6 +324,10 @@ def extract_clue(clue_data, categories, contestant_lookup):
     return clue
 
 
+def check_for_rounds(soup):
+    return soup.find("div", id="jeopardy_round")
+
+
 def extract_show(soup):
     show_number, date = extract_show_info(soup)
     show_id = extract_show_id(soup)
@@ -324,6 +336,8 @@ def extract_show(soup):
     show = Show(season, show_number, date, show_id, prev_id, next_id)
     for contestant in contestants:
         show.add_contestant(contestant)
+    if not check_for_rounds(soup):
+        return show
     show.jeopardy = extract_round(soup, 'jeopardy_round', Jeopardy(), show.contestant_lookup)
     show.double_jeopardy = extract_round(soup, 'double_jeopardy_round', DoubleJeopardy(), show.contestant_lookup)
     show.final_jeopardy = extract_round(soup, 'final_jeopardy_round', FinalJeopardy(), show.contestant_lookup)
