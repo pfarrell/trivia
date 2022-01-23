@@ -141,11 +141,18 @@ def extract_contestants(contestants_list, nicknames):
         if child == '\n':
             continue
         else:
-            contestants.append(extract_contestant(child, nicknames[len(contestants)]))
+            contestants.append(extract_contestant(child, nicknames))
     return contestants
 
 
-def extract_contestant(soup, nickname):
+def extract_nickname(name: str, nicknames: List[str]):
+    for idx, nickname in enumerate(nicknames):
+        if name.startswith(nickname):
+            return nickname
+    raise Exception(f"extract_nickname lookup error: name: {name}, nicknames: {nicknames}")
+
+
+def extract_contestant(soup, nicknames):
     player_id = extract_url_id(soup.contents[0].attrs['href'])
     assert player_id
     name = soup.contents[0].text
@@ -157,9 +164,8 @@ def extract_contestant(soup, nickname):
         profession, origin = soup.text.replace(f"{name}, ", "").rsplit(" from ", 1)
     assert origin
     contestant = Contestant(player_id, name, profession, origin)
-    # TODO this does not work (on game 52, where Christina is nicknamed "Chris").  Need to check final results by order
-    # to extract nicknames
-    contestant.nickname = nickname
+    if nicknames:
+        contestant.nickname = extract_nickname(name, nicknames)
     if re.search(r"\(whose", origin):
         origin, streak, winnings = extract_winnings(origin)
         contestant.origin = origin
