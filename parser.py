@@ -231,8 +231,10 @@ def extract_clues(rnd, categories, contestant_lookup):
 
 def extract_final_clue(rnd, categories, contestant_lookup):
     clues = []
-    clue = extract_clue(rnd, categories, contestant_lookup)
-    clues.append(clue)
+    final_rounds = rnd.find_all("table", class_="final_round")
+    for idx, round in enumerate(final_rounds):
+        clue = extract_clue(round, [categories[idx]], contestant_lookup)
+        clues.append(clue)
     return clues
 
 
