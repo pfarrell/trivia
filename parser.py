@@ -368,11 +368,15 @@ def main(argv):
 
 
 def parse(file):
-    with open (file, "r") as f:
-        data=f.read()
-    soup = BeautifulSoup(data, 'html.parser')
-    show = extract_show(soup)
-    return show
+    try:
+        with open (file, "r") as f:
+            data=f.read()
+        soup = BeautifulSoup(data, 'html.parser')
+        show = extract_show(soup)
+        return show
+    except FileNotFoundError:
+        print(f"No file {file}")
+        return
 
 #  game_comments
 #  jeopardy
@@ -403,4 +407,5 @@ def parse(file):
 
 if __name__ == "__main__":
     show = main(sys.argv[1:])
-    print(show.air_date)
+    if show:
+        print(show.air_date)
